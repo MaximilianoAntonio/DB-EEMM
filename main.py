@@ -65,7 +65,7 @@ class MainWindow(QWidget):
         btn_layout.addWidget(btn_delete)
         left_panel.addLayout(btn_layout)
 
-        # Panel derecho: Tabs para ficha técnica y historial
+        # Panel derecho: Tabs para mostrar detalles
         self.tabs = QTabWidget()
 
         # Tab para Ficha Técnica
@@ -78,13 +78,33 @@ class MainWindow(QWidget):
         self.tech_sheet_tab.setLayout(tech_sheet_layout)
         self.tabs.addTab(self.tech_sheet_tab, "Ficha Técnica")
 
-        # Tab para Historial
-        self.history_tab = QWidget()
-        history_layout = QVBoxLayout()
-        self.history_table = QTableWidget()
-        history_layout.addWidget(self.history_table)
-        self.history_tab.setLayout(history_layout)
-        self.tabs.addTab(self.history_tab, "Historial")
+        # Tab para Historial de Mantenimiento
+        self.maintenance_history_tab = QWidget()
+        maintenance_layout = QVBoxLayout()
+        self.maintenance_table = QTableWidget()
+        maintenance_layout.addWidget(self.maintenance_table)
+
+        # Botón para eliminar mantenimiento
+        btn_delete_maintenance = QPushButton("Eliminar Seleccionado")
+        btn_delete_maintenance.clicked.connect(self.delete_selected_maintenance)
+        maintenance_layout.addWidget(btn_delete_maintenance)
+
+        self.maintenance_history_tab.setLayout(maintenance_layout)
+        self.tabs.addTab(self.maintenance_history_tab, "Historial de Mantenimiento")
+
+        # Tab para Historial de Ubicación
+        self.location_movements_tab = QWidget()
+        movements_layout = QVBoxLayout()
+        self.movements_table = QTableWidget()
+        movements_layout.addWidget(self.movements_table)
+
+        # Botón para eliminar movimiento de ubicación
+        btn_delete_movement = QPushButton("Eliminar Seleccionado")
+        btn_delete_movement.clicked.connect(self.delete_selected_movement)
+        movements_layout.addWidget(btn_delete_movement)
+
+        self.location_movements_tab.setLayout(movements_layout)
+        self.tabs.addTab(self.location_movements_tab, "Historial de Ubicación")
 
         # Añadir los paneles al layout principal
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -98,6 +118,7 @@ class MainWindow(QWidget):
         self.setLayout(main_layout)
 
         self.load_data()
+
 
     def load_data(self):
         cursor = self.connection.cursor()
@@ -138,10 +159,13 @@ class MainWindow(QWidget):
         # Seleccionar la primera fila si existe
         if self.table.rowCount() > 0:
             self.table.selectRow(0)
+            self.show_equipment_details()
         else:
             self.tech_sheet_panel.setPlainText("No hay equipos en el inventario.")
-            self.history_table.clearContents()
-            self.history_table.setRowCount(0)
+            self.maintenance_table.clearContents()
+            self.maintenance_table.setRowCount(0)
+            self.movements_table.clearContents()
+            self.movements_table.setRowCount(0)
 
 
     def add_equipment(self):
@@ -189,6 +213,96 @@ class MainWindow(QWidget):
         else:
             QMessageBox.warning(self, "Advertencia", "Por favor, selecciona un equipo para eliminar.")
 
+    def delete_selected_maintenance(self):
+        selected_row = self.maintenance_table.currentRow()
+        if selected_row < 0:
+            QMessageBox.warning(self, "Advertencia", "Por favor, selecciona un mantenimiento para eliminar.")
+            return
+
+        # Obtener la fecha y tipo de mantenimiento para identificar el registro
+        fecha_item = self.maintenance_table.item(selected_row, 0)
+        tipo_item = self.maintenance_table.item(selected_row, 1)
+        if not fecha_item or not tipo_item:
+            QMessageBox.warning(self, "Advertencia", "No se pudo identificar el mantenimiento seleccionado.")
+            return
+
+        fecha = fecha_item.text()
+        tipo_mantenimiento = tipo_item.text()
+
+        # Confirmar la eliminación
+        reply = QMessageBox.question(
+            self, 'Confirmar Eliminación',
+            f"¿Estás seguro de que deseas eliminar el mantenimiento del {fecha} de tipo '{tipo_mantenimiento}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            cursor = self.connection.cursor()
+            # Suponiendo que fecha y tipo_mantenimiento identifican unívocamente el registro
+            sql = """
+            DELETE FROM historial_mantenimiento
+            WHERE equipo_id = %s AND fecha = %s AND tipo_mantenimiento = %s
+            """
+            equipo_id = self.get_selected_equipo_id()
+            try:
+                cursor.execute(sql, (equipo_id, fecha, tipo_mantenimiento))
+                self.connection.commit()
+                QMessageBox.information(self, "Éxito", "Mantenimiento eliminado correctamente.")
+                self.load_maintenance_history(equipo_id)
+            except pymysql.Error as e:
+                QMessageBox.critical(self, "Error", f"No se pudo eliminar el mantenimiento:\n{e}")
+                self.connection.rollback()
+            cursor.close()
+
+    def delete_selected_movement(self):
+        selected_row = self.movements_table.currentRow()
+        if selected_row < 0:
+            QMessageBox.warning(self, "Advertencia", "Por favor, selecciona un movimiento de ubicación para eliminar.")
+            return
+
+        # Obtener la fecha y nueva ubicación para identificar el registro
+        fecha_item = self.movements_table.item(selected_row, 0)
+        nueva_ubicacion_item = self.movements_table.item(selected_row, 2)
+        if not fecha_item or not nueva_ubicacion_item:
+            QMessageBox.warning(self, "Advertencia", "No se pudo identificar el movimiento seleccionado.")
+            return
+
+        fecha = fecha_item.text()
+        nueva_ubicacion = nueva_ubicacion_item.text()
+
+        # Confirmar la eliminación
+        reply = QMessageBox.question(
+            self, 'Confirmar Eliminación',
+            f"¿Estás seguro de que deseas eliminar el movimiento de ubicación a '{nueva_ubicacion}' del {fecha}?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            cursor = self.connection.cursor()
+            # Suponiendo que fecha y nueva_ubicacion identifican unívocamente el registro
+            sql = """
+            DELETE FROM movimientos_ubicacion
+            WHERE equipo_id = %s AND fecha = %s AND nueva_ubicacion = %s
+            """
+            equipo_id = self.get_selected_equipo_id()
+            try:
+                cursor.execute(sql, (equipo_id, fecha, nueva_ubicacion))
+                self.connection.commit()
+                QMessageBox.information(self, "Éxito", "Movimiento de ubicación eliminado correctamente.")
+                self.load_location_movements(equipo_id)
+            except pymysql.Error as e:
+                QMessageBox.critical(self, "Error", f"No se pudo eliminar el movimiento de ubicación:\n{e}")
+                self.connection.rollback()
+            cursor.close()
+
+    def get_selected_equipo_id(self):
+        selected_items = self.table.selectedItems()
+        if selected_items:
+            return int(selected_items[0].text())
+        return None
+
     def open_equipment_details(self):
         selected_row = self.table.currentRow()
         if selected_row >= 0:
@@ -206,11 +320,14 @@ class MainWindow(QWidget):
         if selected_items:
             equipo_id = int(selected_items[0].text())
             self.load_tech_sheet(equipo_id)
-            self.load_history(equipo_id)
+            self.load_maintenance_history(equipo_id)
+            self.load_location_movements(equipo_id)
         else:
             self.tech_sheet_panel.setPlainText("Seleccione un equipo para ver la ficha técnica.")
-            self.history_table.clearContents()
-            self.history_table.setRowCount(0)
+            self.maintenance_table.clearContents()
+            self.maintenance_table.setRowCount(0)
+            self.movements_table.clearContents()
+            self.movements_table.setRowCount(0)
 
     def load_tech_sheet(self, equipo_id):
         cursor = self.connection.cursor()
@@ -257,25 +374,66 @@ class MainWindow(QWidget):
         finally:
             cursor.close()
 
-    def load_history(self, equipo_id):
+    def load_maintenance_history(self, equipo_id):
         cursor = self.connection.cursor()
-        sql = "SELECT fecha_evento, descripcion_evento FROM historial_equipo WHERE equipo_id = %s ORDER BY fecha_evento DESC"
+        sql = """
+        SELECT fecha, tipo_mantenimiento, actividad_realizada, proveedor_tecnico,
+            nombre_responsable, observaciones
+        FROM historial_mantenimiento
+        WHERE equipo_id = %s
+        ORDER BY fecha DESC
+        """
         try:
             cursor.execute(sql, (equipo_id,))
             results = cursor.fetchall()
-            self.history_table.setRowCount(len(results))
-            self.history_table.setColumnCount(2)
-            self.history_table.setHorizontalHeaderLabels(["Fecha", "Descripción"])
+            self.maintenance_table.setRowCount(len(results))
+            self.maintenance_table.setColumnCount(6)
+            self.maintenance_table.setHorizontalHeaderLabels([
+                "Fecha", "Tipo de Mantenimiento", "Actividad Realizada",
+                "Proveedor/Técnico", "Nombre Responsable", "Observaciones"
+            ])
             for row_num, row_data in enumerate(results):
-                self.history_table.setItem(row_num, 0, QTableWidgetItem(str(row_data[0])))
-                self.history_table.setItem(row_num, 1, QTableWidgetItem(row_data[1]))
-            self.history_table.resizeColumnsToContents()
+                for col_num, data in enumerate(row_data):
+                    item = QTableWidgetItem(str(data))
+                    self.maintenance_table.setItem(row_num, col_num, item)
+            self.maintenance_table.resizeColumnsToContents()
         except pymysql.Error as e:
-            QMessageBox.critical(self, "Error", f"No se pudo cargar el historial:\n{e}")
-            self.history_table.clearContents()
-            self.history_table.setRowCount(0)
+            QMessageBox.critical(self, "Error", f"No se pudo cargar el historial de mantenimiento:\n{e}")
+            self.maintenance_table.clearContents()
+            self.maintenance_table.setRowCount(0)
         finally:
             cursor.close()
+
+    def load_location_movements(self, equipo_id):
+        cursor = self.connection.cursor()
+        sql = """
+        SELECT fecha, ubicacion_original, nueva_ubicacion,
+            nombre_responsable, observaciones
+        FROM movimientos_ubicacion
+        WHERE equipo_id = %s
+        ORDER BY fecha DESC
+        """
+        try:
+            cursor.execute(sql, (equipo_id,))
+            results = cursor.fetchall()
+            self.movements_table.setRowCount(len(results))
+            self.movements_table.setColumnCount(5)
+            self.movements_table.setHorizontalHeaderLabels([
+                "Fecha", "Ubicación Original", "Nueva Ubicación",
+                "Nombre Responsable", "Observaciones"
+            ])
+            for row_num, row_data in enumerate(results):
+                for col_num, data in enumerate(row_data):
+                    item = QTableWidgetItem(str(data))
+                    self.movements_table.setItem(row_num, col_num, item)
+            self.movements_table.resizeColumnsToContents()
+        except pymysql.Error as e:
+            QMessageBox.critical(self, "Error", f"No se pudo cargar el historial de ubicación:\n{e}")
+            self.movements_table.clearContents()
+            self.movements_table.setRowCount(0)
+        finally:
+            cursor.close()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

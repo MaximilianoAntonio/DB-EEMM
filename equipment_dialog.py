@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QDialog, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QPushButton, QLineEdit, QDateEdit, QMessageBox, QTextEdit, QLabel, QTableWidget,
-    QTableWidgetItem
+    QTableWidgetItem, QComboBox
 )
 from PyQt6.QtCore import QDate
 import pymysql
@@ -17,7 +17,8 @@ class EquipmentDialog(QDialog):
         if equipo_id:
             self.load_equipment_data()
             self.load_ficha_tecnica()
-            self.load_historial()
+            self.load_historial_mantenimiento()
+            self.load_movimientos_ubicacion()
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -33,10 +34,15 @@ class EquipmentDialog(QDialog):
         self.init_ficha_tecnica_tab()
         self.tabs.addTab(self.tab_ficha_tecnica, "Ficha Técnica")
 
-        # Pestaña de Historial
-        self.tab_historial = QWidget()
-        self.init_historial_tab()
-        self.tabs.addTab(self.tab_historial, "Historial")
+        # Pestaña de Historial de Mantenimiento
+        self.tab_historial_mantenimiento = QWidget()
+        self.init_historial_mantenimiento_tab()
+        self.tabs.addTab(self.tab_historial_mantenimiento, "Historial de Mantenimiento")
+
+        # Pestaña de Movimientos de Ubicación
+        self.tab_movimientos_ubicacion = QWidget()
+        self.init_movimientos_ubicacion_tab()
+        self.tabs.addTab(self.tab_movimientos_ubicacion, "Movimientos de Ubicación")
 
         layout.addWidget(self.tabs)
 
@@ -49,7 +55,7 @@ class EquipmentDialog(QDialog):
         btn_layout.addWidget(btn_save)
         btn_layout.addWidget(btn_cancel)
         layout.addLayout(btn_layout)
-
+        
         self.setLayout(layout)
 
     def init_datos_inventario_tab(self):
@@ -103,30 +109,72 @@ class EquipmentDialog(QDialog):
 
         self.tab_ficha_tecnica.setLayout(layout)
 
-    def init_historial_tab(self):
+
+    def init_historial_mantenimiento_tab(self):
         layout = QVBoxLayout()
 
-        # Tabla de historial
-        self.historial_table = QTableWidget()
-        layout.addWidget(self.historial_table)
+        # Tabla para mostrar el historial de mantenimiento
+        self.historial_mantenimiento_table = QTableWidget()
+        layout.addWidget(self.historial_mantenimiento_table)
 
-        # Formulario para agregar evento
-        form_layout = QHBoxLayout()
-        self.fecha_evento_input = QDateEdit()
-        self.fecha_evento_input.setCalendarPopup(True)
-        self.fecha_evento_input.setDate(QDate.currentDate())
-        self.descripcion_evento_input = QLineEdit()
-        btn_add_event = QPushButton("Agregar Evento")
-        btn_add_event.clicked.connect(self.add_historial_event)
+        # Formulario para agregar nuevo mantenimiento
+        form_layout = QFormLayout()
+        self.fecha_mantenimiento_input = QDateEdit()
+        self.fecha_mantenimiento_input.setCalendarPopup(True)
+        self.fecha_mantenimiento_input.setDate(QDate.currentDate())
+        self.tipo_mantenimiento_input = QComboBox()
+        self.tipo_mantenimiento_input.addItems(["Preventivo", "Correctivo", "Otro"])
+        self.actividad_realizada_input = QLineEdit()
+        self.proveedor_tecnico_input = QLineEdit()
+        self.nombre_responsable_input = QLineEdit()
+        self.observaciones_mantenimiento_input = QTextEdit()
 
-        form_layout.addWidget(QLabel("Fecha:"))
-        form_layout.addWidget(self.fecha_evento_input)
-        form_layout.addWidget(QLabel("Descripción:"))
-        form_layout.addWidget(self.descripcion_evento_input)
-        form_layout.addWidget(btn_add_event)
+        form_layout.addRow("Fecha:", self.fecha_mantenimiento_input)
+        form_layout.addRow("Tipo de Mantenimiento:", self.tipo_mantenimiento_input)
+        form_layout.addRow("Actividad Realizada:", self.actividad_realizada_input)
+        form_layout.addRow("Proveedor/Técnico:", self.proveedor_tecnico_input)
+        form_layout.addRow("Nombre Responsable:", self.nombre_responsable_input)
+        form_layout.addRow("Observaciones:", self.observaciones_mantenimiento_input)
+
+        btn_add_mantenimiento = QPushButton("Agregar Mantenimiento")
+        btn_add_mantenimiento.clicked.connect(self.add_historial_mantenimiento)
 
         layout.addLayout(form_layout)
-        self.tab_historial.setLayout(layout)
+        layout.addWidget(btn_add_mantenimiento)
+
+        self.tab_historial_mantenimiento.setLayout(layout)
+
+    def init_movimientos_ubicacion_tab(self):
+        layout = QVBoxLayout()
+
+        # Tabla para mostrar los movimientos de ubicación
+        self.movimientos_ubicacion_table = QTableWidget()
+        layout.addWidget(self.movimientos_ubicacion_table)
+
+        # Formulario para agregar nuevo movimiento
+        form_layout = QFormLayout()
+        self.fecha_movimiento_input = QDateEdit()
+        self.fecha_movimiento_input.setCalendarPopup(True)
+        self.fecha_movimiento_input.setDate(QDate.currentDate())
+        self.ubicacion_original_input = QLineEdit()
+        self.nueva_ubicacion_input = QLineEdit()
+        self.nombre_responsable_mov_input = QLineEdit()
+        self.observaciones_movimiento_input = QTextEdit()
+
+        form_layout.addRow("Fecha:", self.fecha_movimiento_input)
+        form_layout.addRow("Ubicación Original:", self.ubicacion_original_input)
+        form_layout.addRow("Nueva Ubicación:", self.nueva_ubicacion_input)
+        form_layout.addRow("Nombre Responsable:", self.nombre_responsable_mov_input)
+        form_layout.addRow("Observaciones:", self.observaciones_movimiento_input)
+
+        btn_add_movimiento = QPushButton("Agregar Movimiento")
+        btn_add_movimiento.clicked.connect(self.add_movimiento_ubicacion)
+
+        layout.addLayout(form_layout)
+        layout.addWidget(btn_add_movimiento)
+
+        self.tab_movimientos_ubicacion.setLayout(layout)
+
 
     def load_equipment_data(self):
         cursor = self.connection.cursor()
@@ -173,40 +221,129 @@ class EquipmentDialog(QDialog):
             self.estado_equipo_input.clear()
             self.datos_proveedor_input.clear()
 
-    def load_historial(self):
+    def load_historial_mantenimiento(self):
         cursor = self.connection.cursor()
-        sql = "SELECT fecha_evento, descripcion_evento FROM historial_equipo WHERE equipo_id = %s ORDER BY fecha_evento DESC"
-        cursor.execute(sql, (self.equipo_id,))
-        results = cursor.fetchall()
-        cursor.close()
+        sql = """
+        SELECT fecha, tipo_mantenimiento, actividad_realizada, proveedor_tecnico,
+            nombre_responsable, observaciones
+        FROM historial_mantenimiento
+        WHERE equipo_id = %s
+        ORDER BY fecha DESC
+        """
+        try:
+            cursor.execute(sql, (self.equipo_id,))
+            results = cursor.fetchall()
+            self.historial_mantenimiento_table.setRowCount(len(results))
+            self.historial_mantenimiento_table.setColumnCount(6)
+            self.historial_mantenimiento_table.setHorizontalHeaderLabels([
+                "Fecha", "Tipo de Mantenimiento", "Actividad Realizada",
+                "Proveedor/Técnico", "Nombre Responsable", "Observaciones"
+            ])
+            for row_num, row_data in enumerate(results):
+                for col_num, data in enumerate(row_data):
+                    item = QTableWidgetItem(str(data))
+                    self.historial_mantenimiento_table.setItem(row_num, col_num, item)
+            self.historial_mantenimiento_table.resizeColumnsToContents()
+        except pymysql.Error as e:
+            QMessageBox.critical(self, "Error", f"No se pudo cargar el historial de mantenimiento:\n{e}")
+        finally:
+            cursor.close()
 
-        self.historial_table.setRowCount(len(results))
-        self.historial_table.setColumnCount(2)
-        self.historial_table.setHorizontalHeaderLabels(["Fecha", "Descripción"])
-        for row_num, row_data in enumerate(results):
-            self.historial_table.setItem(row_num, 0, QTableWidgetItem(str(row_data[0])))
-            self.historial_table.setItem(row_num, 1, QTableWidgetItem(row_data[1]))
-        self.historial_table.resizeColumnsToContents()
-
-    def add_historial_event(self):
-        fecha_evento = self.fecha_evento_input.date().toString("yyyy-MM-dd")
-        descripcion_evento = self.descripcion_evento_input.text()
-        if not descripcion_evento:
-            QMessageBox.warning(self, "Advertencia", "Por favor, ingresa la descripción del evento.")
-            return
+    def load_movimientos_ubicacion(self):
         cursor = self.connection.cursor()
-        sql = "INSERT INTO historial_equipo (equipo_id, fecha_evento, descripcion_evento) VALUES (%s, %s, %s)"
-        values = (self.equipo_id, fecha_evento, descripcion_evento)
+        sql = """
+        SELECT fecha, ubicacion_original, nueva_ubicacion,
+            nombre_responsable, observaciones
+        FROM movimientos_ubicacion
+        WHERE equipo_id = %s
+        ORDER BY fecha DESC
+        """
+        try:
+            cursor.execute(sql, (self.equipo_id,))
+            results = cursor.fetchall()
+            self.movimientos_ubicacion_table.setRowCount(len(results))
+            self.movimientos_ubicacion_table.setColumnCount(5)
+            self.movimientos_ubicacion_table.setHorizontalHeaderLabels([
+                "Fecha", "Ubicación Original", "Nueva Ubicación",
+                "Nombre Responsable", "Observaciones"
+            ])
+            for row_num, row_data in enumerate(results):
+                for col_num, data in enumerate(results[row_num]):
+                    item = QTableWidgetItem(str(data))
+                    self.movimientos_ubicacion_table.setItem(row_num, col_num, item)
+            self.movimientos_ubicacion_table.resizeColumnsToContents()
+        except pymysql.Error as e:
+            QMessageBox.critical(self, "Error", f"No se pudo cargar los movimientos de ubicación:\n{e}")
+        finally:
+            cursor.close()
+
+    def add_historial_mantenimiento(self):
+        fecha = self.fecha_mantenimiento_input.date().toString("yyyy-MM-dd")
+        tipo_mantenimiento = self.tipo_mantenimiento_input.currentText()
+        actividad_realizada = self.actividad_realizada_input.text()
+        proveedor_tecnico = self.proveedor_tecnico_input.text()
+        nombre_responsable = self.nombre_responsable_input.text()
+        observaciones = self.observaciones_mantenimiento_input.toPlainText()
+
+        cursor = self.connection.cursor()
+        sql = """
+        INSERT INTO historial_mantenimiento (
+            equipo_id, fecha, tipo_mantenimiento, actividad_realizada,
+            proveedor_tecnico, nombre_responsable, observaciones
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        values = (
+            self.equipo_id, fecha, tipo_mantenimiento, actividad_realizada,
+            proveedor_tecnico, nombre_responsable, observaciones
+        )
         try:
             cursor.execute(sql, values)
             self.connection.commit()
-            QMessageBox.information(self, "Éxito", "Evento agregado al historial.")
-            self.descripcion_evento_input.clear()
-            self.load_historial()
+            QMessageBox.information(self, "Éxito", "Mantenimiento agregado al historial.")
+            # Limpiar campos
+            self.actividad_realizada_input.clear()
+            self.proveedor_tecnico_input.clear()
+            self.nombre_responsable_input.clear()
+            self.observaciones_mantenimiento_input.clear()
+            self.load_historial_mantenimiento()
         except pymysql.Error as e:
-            QMessageBox.critical(self, "Error", f"No se pudo agregar el evento:\n{e}")
+            QMessageBox.critical(self, "Error", f"No se pudo agregar el mantenimiento:\n{e}")
             self.connection.rollback()
         cursor.close()
+
+    def add_movimiento_ubicacion(self):
+        fecha = self.fecha_movimiento_input.date().toString("yyyy-MM-dd")
+        ubicacion_original = self.ubicacion_original_input.text()
+        nueva_ubicacion = self.nueva_ubicacion_input.text()
+        nombre_responsable = self.nombre_responsable_mov_input.text()
+        observaciones = self.observaciones_movimiento_input.toPlainText()
+
+        cursor = self.connection.cursor()
+        sql = """
+        INSERT INTO movimientos_ubicacion (
+            equipo_id, fecha, ubicacion_original, nueva_ubicacion,
+            nombre_responsable, observaciones
+        ) VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        values = (
+            self.equipo_id, fecha, ubicacion_original, nueva_ubicacion,
+            nombre_responsable, observaciones
+        )
+        try:
+            cursor.execute(sql, values)
+            self.connection.commit()
+            QMessageBox.information(self, "Éxito", "Movimiento de ubicación agregado.")
+            # Limpiar campos
+            self.ubicacion_original_input.clear()
+            self.nueva_ubicacion_input.clear()
+            self.nombre_responsable_mov_input.clear()
+            self.observaciones_movimiento_input.clear()
+            self.load_movimientos_ubicacion()
+        except pymysql.Error as e:
+            QMessageBox.critical(self, "Error", f"No se pudo agregar el movimiento:\n{e}")
+            self.connection.rollback()
+        cursor.close()
+
 
     def save_all(self):
         # Obtener datos del formulario
