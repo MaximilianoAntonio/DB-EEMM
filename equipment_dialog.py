@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import (
-    QDialog, QTabWidget, QWidget, QVBoxLayout, QPushButton, QFormLayout, QLineEdit,
-    QDateEdit, QMessageBox, QTextEdit, QTableWidget, QTableWidgetItem, QHBoxLayout, QLabel
+    QDialog, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
+    QPushButton, QLineEdit, QDateEdit, QMessageBox, QTextEdit, QLabel, QTableWidget,
+    QTableWidgetItem
 )
 from PyQt6.QtCore import QDate
 import pymysql
@@ -53,32 +54,53 @@ class EquipmentDialog(QDialog):
 
     def init_datos_inventario_tab(self):
         layout = QFormLayout()
-        self.descripcion_input = QLineEdit()
+        self.equipo_medico_input = QLineEdit()
+        self.emdn_input = QLineEdit()
         self.marca_input = QLineEdit()
         self.modelo_input = QLineEdit()
         self.numero_serie_input = QLineEdit()
         self.ubicacion_input = QLineEdit()
         self.estado_input = QLineEdit()
-        self.valor_input = QLineEdit()
+        self.valor_adquisicion_input = QLineEdit()
+        self.valor_reposicion_input = QLineEdit()
         self.fecha_adquisicion_input = QDateEdit()
         self.fecha_adquisicion_input.setCalendarPopup(True)
         self.fecha_adquisicion_input.setDate(QDate.currentDate())
 
-        layout.addRow("Descripción:", self.descripcion_input)
+        layout.addRow("Equipo Médico:", self.equipo_medico_input)
+        layout.addRow("EMDN:", self.emdn_input)
         layout.addRow("Marca:", self.marca_input)
         layout.addRow("Modelo:", self.modelo_input)
         layout.addRow("Número de Serie:", self.numero_serie_input)
         layout.addRow("Ubicación:", self.ubicacion_input)
         layout.addRow("Estado:", self.estado_input)
-        layout.addRow("Valor:", self.valor_input)
+        layout.addRow("Valor de Adquisición (CLP):", self.valor_adquisicion_input)
+        layout.addRow("Valor de Reposición (CLP):", self.valor_reposicion_input)
         layout.addRow("Fecha de Adquisición:", self.fecha_adquisicion_input)
 
         self.tab_datos_inventario.setLayout(layout)
 
     def init_ficha_tecnica_tab(self):
-        layout = QVBoxLayout()
-        self.especificaciones_text = QTextEdit()
-        layout.addWidget(self.especificaciones_text)
+        layout = QFormLayout()
+
+        # Campos de entrada para los nuevos datos
+        self.datos_tecnicos_input = QTextEdit()
+        self.accesorios_input = QTextEdit()
+        self.manuales_input = QTextEdit()
+        self.observaciones_input = QTextEdit()
+        self.frecuencia_mantenimiento_input = QLineEdit()
+        self.estado_equipo_input = QLineEdit()
+        self.datos_proveedor_input = QTextEdit()
+
+        # Añadir campos al formulario
+        layout.addRow("Datos Técnicos:", self.datos_tecnicos_input)
+        layout.addRow("Accesorios:", self.accesorios_input)
+        layout.addRow("Manuales:", self.manuales_input)
+        layout.addRow("Observaciones:", self.observaciones_input)
+        layout.addRow("Frecuencia de Mantenimiento:", self.frecuencia_mantenimiento_input)
+        layout.addRow("Estado del Equipo:", self.estado_equipo_input)
+        layout.addRow("Datos del Proveedor:", self.datos_proveedor_input)
+
         self.tab_ficha_tecnica.setLayout(layout)
 
     def init_historial_tab(self):
@@ -114,25 +136,42 @@ class EquipmentDialog(QDialog):
         cursor.close()
 
         if result:
-            self.descripcion_input.setText(result[1])
-            self.marca_input.setText(result[2])
-            self.modelo_input.setText(result[3])
-            self.numero_serie_input.setText(result[4])
-            self.ubicacion_input.setText(result[5])
-            self.estado_input.setText(result[6])
-            self.valor_input.setText(str(result[7]))
-            self.fecha_adquisicion_input.setDate(QDate.fromString(str(result[8]), "yyyy-MM-dd"))
+            self.equipo_medico_input.setText(result[1])
+            self.emdn_input.setText(result[2])
+            self.marca_input.setText(result[3])
+            self.modelo_input.setText(result[4])
+            self.numero_serie_input.setText(result[5])
+            self.ubicacion_input.setText(result[6])
+            self.estado_input.setText(result[7])
+            self.valor_adquisicion_input.setText(str(result[8]))
+            self.valor_reposicion_input.setText(str(result[9]))
+            self.fecha_adquisicion_input.setDate(QDate.fromString(str(result[10]), "yyyy-MM-dd"))
+
+
 
     def load_ficha_tecnica(self):
         cursor = self.connection.cursor()
-        sql = "SELECT especificaciones FROM ficha_tecnica WHERE equipo_id = %s"
+        sql = "SELECT datos_tecnicos, accesorios, manuales, observaciones, frecuencia_mantenimiento, estado_equipo, datos_proveedor FROM ficha_tecnica WHERE equipo_id = %s"
         cursor.execute(sql, (self.equipo_id,))
         result = cursor.fetchone()
         cursor.close()
         if result:
-            self.especificaciones_text.setText(result[0])
+            self.datos_tecnicos_input.setPlainText(result[0] or "")
+            self.accesorios_input.setPlainText(result[1] or "")
+            self.manuales_input.setPlainText(result[2] or "")
+            self.observaciones_input.setPlainText(result[3] or "")
+            self.frecuencia_mantenimiento_input.setText(result[4] or "")
+            self.estado_equipo_input.setText(result[5] or "")
+            self.datos_proveedor_input.setPlainText(result[6] or "")
         else:
-            self.especificaciones_text.setText("")
+            # Limpiar los campos si no hay datos
+            self.datos_tecnicos_input.clear()
+            self.accesorios_input.clear()
+            self.manuales_input.clear()
+            self.observaciones_input.clear()
+            self.frecuencia_mantenimiento_input.clear()
+            self.estado_equipo_input.clear()
+            self.datos_proveedor_input.clear()
 
     def load_historial(self):
         cursor = self.connection.cursor()
@@ -170,38 +209,50 @@ class EquipmentDialog(QDialog):
         cursor.close()
 
     def save_all(self):
-        # Guardar datos del inventario
-        descripcion = self.descripcion_input.text()
+        # Obtener datos del formulario
+        equipo_medico = self.equipo_medico_input.text()
+        emdn = self.emdn_input.text()
         marca = self.marca_input.text()
         modelo = self.modelo_input.text()
         numero_serie = self.numero_serie_input.text()
         ubicacion = self.ubicacion_input.text()
         estado = self.estado_input.text()
-        valor = self.valor_input.text()
+        valor_adquisicion = self.valor_adquisicion_input.text()
+        valor_reposicion = self.valor_reposicion_input.text()
         fecha_adquisicion = self.fecha_adquisicion_input.date().toString("yyyy-MM-dd")
 
-        if not descripcion or not marca or not modelo:
+        if not equipo_medico or not marca or not modelo:
             QMessageBox.warning(self, "Advertencia", "Por favor, completa los campos obligatorios.")
             return
 
         cursor = self.connection.cursor()
         if self.equipo_id is None:
             sql_inventario = """
-            INSERT INTO inventario (descripcion, marca, modelo, numero_serie, ubicacion, estado, valor, fecha_adquisicion)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO inventario (
+                equipo_medico, emdn, marca, modelo, numero_serie, ubicacion,
+                estado, valor_adquisicion, valor_reposicion, fecha_adquisicion
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
-            inventario_values = (descripcion, marca, modelo, numero_serie, ubicacion, estado, valor, fecha_adquisicion)
+            inventario_values = (
+                equipo_medico, emdn, marca, modelo, numero_serie, ubicacion,
+                estado, valor_adquisicion, valor_reposicion, fecha_adquisicion
+            )
         else:
             sql_inventario = """
             UPDATE inventario
-            SET descripcion=%s, marca=%s, modelo=%s, numero_serie=%s, ubicacion=%s, estado=%s, valor=%s, fecha_adquisicion=%s
+            SET equipo_medico=%s, emdn=%s, marca=%s, modelo=%s, numero_serie=%s,
+                ubicacion=%s, estado=%s, valor_adquisicion=%s, valor_reposicion=%s,
+                fecha_adquisicion=%s
             WHERE id=%s
             """
-            inventario_values = (descripcion, marca, modelo, numero_serie, ubicacion, estado, valor, fecha_adquisicion, self.equipo_id)
+            inventario_values = (
+                equipo_medico, emdn, marca, modelo, numero_serie, ubicacion,
+                estado, valor_adquisicion, valor_reposicion, fecha_adquisicion, self.equipo_id
+            )
         try:
             if self.equipo_id is None:
                 cursor.execute(sql_inventario, inventario_values)
-                self.equipo_id = cursor.lastrowid  # Obtener el ID asignado
+                self.equipo_id = cursor.lastrowid
             else:
                 cursor.execute(sql_inventario, inventario_values)
             self.connection.commit()
@@ -214,18 +265,48 @@ class EquipmentDialog(QDialog):
             self.connection.rollback()
         cursor.close()
 
+
+
     def save_ficha_tecnica(self):
-        especificaciones = self.especificaciones_text.toPlainText()
+        datos_tecnicos = self.datos_tecnicos_input.toPlainText()
+        accesorios = self.accesorios_input.toPlainText()
+        manuales = self.manuales_input.toPlainText()
+        observaciones = self.observaciones_input.toPlainText()
+        frecuencia_mantenimiento = self.frecuencia_mantenimiento_input.text()
+        estado_equipo = self.estado_equipo_input.text()
+        datos_proveedor = self.datos_proveedor_input.toPlainText()
+
         cursor = self.connection.cursor()
         sql_select = "SELECT * FROM ficha_tecnica WHERE equipo_id = %s"
         cursor.execute(sql_select, (self.equipo_id,))
         result = cursor.fetchone()
         if result:
-            sql = "UPDATE ficha_tecnica SET especificaciones = %s WHERE equipo_id = %s"
-            values = (especificaciones, self.equipo_id)
+            sql = """
+            UPDATE ficha_tecnica SET
+                datos_tecnicos = %s,
+                accesorios = %s,
+                manuales = %s,
+                observaciones = %s,
+                frecuencia_mantenimiento = %s,
+                estado_equipo = %s,
+                datos_proveedor = %s
+            WHERE equipo_id = %s
+            """
+            values = (
+                datos_tecnicos, accesorios, manuales, observaciones,
+                frecuencia_mantenimiento, estado_equipo, datos_proveedor, self.equipo_id
+            )
         else:
-            sql = "INSERT INTO ficha_tecnica (equipo_id, especificaciones) VALUES (%s, %s)"
-            values = (self.equipo_id, especificaciones)
+            sql = """
+            INSERT INTO ficha_tecnica (
+                equipo_id, datos_tecnicos, accesorios, manuales, observaciones,
+                frecuencia_mantenimiento, estado_equipo, datos_proveedor
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            values = (
+                self.equipo_id, datos_tecnicos, accesorios, manuales, observaciones,
+                frecuencia_mantenimiento, estado_equipo, datos_proveedor
+            )
         try:
             cursor.execute(sql, values)
             self.connection.commit()

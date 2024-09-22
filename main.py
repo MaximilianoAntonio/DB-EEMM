@@ -103,18 +103,32 @@ class MainWindow(QWidget):
         cursor = self.connection.cursor()
         search_text = self.search_input.text()
         if search_text:
-            sql = "SELECT * FROM inventario WHERE descripcion LIKE %s OR marca LIKE %s OR modelo LIKE %s"
-            cursor.execute(sql, (f"%{search_text}%", f"%{search_text}%", f"%{search_text}%"))
+            sql = """
+            SELECT * FROM inventario WHERE
+            equipo_medico LIKE %s OR emdn LIKE %s OR marca LIKE %s OR modelo LIKE %s
+            """
+            cursor.execute(sql, (f"%{search_text}%", f"%{search_text}%", f"%{search_text}%", f"%{search_text}%"))
         else:
             sql = "SELECT * FROM inventario"
             cursor.execute(sql)
         results = cursor.fetchall()
         self.table.setRowCount(len(results))
-        self.table.setColumnCount(9)
-        self.table.setHorizontalHeaderLabels(["ID", "Descripción", "Marca", "Modelo", "Nº Serie", "Ubicación", "Estado", "Valor", "Fecha Adquisición"])
+        self.table.setColumnCount(11)
+        self.table.setHorizontalHeaderLabels([
+            "ID", "Equipo Médico", "EMDN", "Marca", "Modelo", "Nº Serie",
+            "Ubicación", "Estado", "Valor de Adquisición (CLP)",
+            "Valor de Reposición (CLP)", "Fecha Adquisición"
+        ])
         for row_num, row_data in enumerate(results):
             for col_num, data in enumerate(row_data):
-                item = QTableWidgetItem(str(data))
+                if col_num in [8, 9]:  # Columnas de valores monetarios
+                    if data is not None:
+                        value = float(data)
+                        item = QTableWidgetItem(f"${value:,.2f}")
+                    else:
+                        item = QTableWidgetItem("$0.00")
+                else:
+                    item = QTableWidgetItem(str(data) if data is not None else "")
                 if col_num == 0:
                     item.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled)
                 self.table.setItem(row_num, col_num, item)
@@ -128,6 +142,7 @@ class MainWindow(QWidget):
             self.tech_sheet_panel.setPlainText("No hay equipos en el inventario.")
             self.history_table.clearContents()
             self.history_table.setRowCount(0)
+
 
     def add_equipment(self):
         dialog = EquipmentDialog(self.connection)
@@ -199,12 +214,41 @@ class MainWindow(QWidget):
 
     def load_tech_sheet(self, equipo_id):
         cursor = self.connection.cursor()
-        sql = "SELECT especificaciones FROM ficha_tecnica WHERE equipo_id = %s"
+        sql = """
+        SELECT datos_tecnicos, accesorios, manuales, observaciones,
+            frecuencia_mantenimiento, estado_equipo, datos_proveedor
+        FROM ficha_tecnica WHERE equipo_id = %s
+        """
         try:
             cursor.execute(sql, (equipo_id,))
             result = cursor.fetchone()
-            if result and result[0]:
-                self.tech_sheet_panel.setPlainText(result[0])
+            if result:
+                datos_tecnicos = result[0] or ""
+                accesorios = result[1] or ""
+                manuales = result[2] or ""
+                observaciones = result[3] or ""
+                frecuencia_mantenimiento = result[4] or ""
+                estado_equipo = result[5] or ""
+                datos_proveedor = result[6] or ""
+
+                # Formatear el texto para mostrarlo en el QTextEdit
+                ficha_texto = f"""
+                <h2>Datos Técnicos</h2>
+                <p>{datos_tecnicos}</p>
+                <h2>Accesorios</h2>
+                <p>{accesorios}</p>
+                <h2>Manuales</h2>
+                <p>{manuales}</p>
+                <h2>Observaciones</h2>
+                <p>{observaciones}</p>
+                <h2>Frecuencia de Mantenimiento</h2>
+                <p>{frecuencia_mantenimiento}</p>
+                <h2>Estado del Equipo</h2>
+                <p>{estado_equipo}</p>
+                <h2>Datos del Proveedor</h2>
+                <p>{datos_proveedor}</p>
+                """
+                self.tech_sheet_panel.setHtml(ficha_texto)
             else:
                 self.tech_sheet_panel.setPlainText("No hay ficha técnica disponible para este equipo.")
         except pymysql.Error as e:
